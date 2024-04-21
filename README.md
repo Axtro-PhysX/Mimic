@@ -1,4 +1,4 @@
 # Deckard
-Linux Pluggable Authentication Modules (PAM) Backdoor
+Linux Pluggable Authentication Module (PAM) Backdoor
 
 ⚠️ Under Construction
